@@ -1,44 +1,51 @@
 /** @jsxImportSource npm:hono@4/jsx */
 import { Hono } from "npm:hono@4";
 import { html } from "npm:hono@4/html";
-import { serveStatic } from "npm:hono@4/serve-static";
-import sharp from "npm:sharp";
+import { Image, decode } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 
 const app = new Hono();
 
 // =======================
-// 1. IMAGE PROCESSOR
+// 1. ASSETS (Base64 encoded 4K Badge)
 // =======================
-async function add4KBadge(imageBuffer: ArrayBuffer): Promise<Buffer> {
-  const image = sharp(imageBuffer);
-  const metadata = await image.metadata();
-  const width = metadata.width || 1000;
+// Deno Deploy မှာ SVG render မလုပ်ဘဲ အသင့်သုံးလို့ရအောင် Gold Badge ကို Base64 ပြောင်းထားခြင်း
+const GOLD_BADGE_B64 = "iVBORw0KGgoAAAANSUhEUgAAAJYAAAAyCAYAAAC+jCIaAAAACXBIWXMAAAsTAAALEwEAmpwYAAAEtElEQVR4nO2cS2gcVRzGfzO7m2yTTdI2rU0wNqUpVOqhFStFURQvFQS9eBEErx48eCyePYiCR/GgBwVBxEbwqqCCVUFFrF+l2mqTabVJmza72ezOzI5/JpOd3WQzb5LQ/8MwM3vI/Ob/zf/+74yQJAmFQqEwRwhfB1AoFArTKIQVCoVeQQgrFAq9ghBWKBR6BSGsUCj0CkJYoVDoFYSwoiD+jW8C14HrwE3gOrAMZIASsA48BRwH3gbawvgyghBWlMQd4GngKeA6C6/9DnAEOAT0heFlBCGsqIhbgafM3zV2XvsEcAT4w7y2KwwvEwhhRUEsA54D7jV/l9h5/RHgkPm7KAwvEwhhRTnMA08C9wFLHLz+K3DA/B0Kw8sIQlhRDEvAM8BjwBKH7/gFOGj+DoThZQghrCiGOeAJ4FHgBofv+Qk4aP4OhOFlBCGsKIaF5in1EWAJx3f9ZJ5S34bhZQghrCiGBWAP8BiwxOF7fgYOmr99YXgZQQgriuE64EngMWCJw/f8Chw0f/vC8DKCEFYUwyywF3gEWOLwPb8BB83fvjC8DCGEFcWwANwDPAFc5/A9vwMHzd++MLwMIYQVxTAB3AU8Aixx+J4/gIPmb18YXkYQwopiuM48pT4CLHH4nt+Bg+ZvXxheRhDCimKYA+4EHgGWOHzPn8BB87cvDC9DCGFFMSwA9wAPO3zHr8BB83cgDC9DCGFFMdyQu/Y4fMevwEHzdyAML0MIYUUxLAD3AA8DSxy+50/goPnbF4aXIYSw4hTWm/X4QeBmh+/5Czhk/vaF4WUEIaw4hTXAAfO0eQO4xuF7/gYOmb99YXgZQQgrTuEa80v158A1Dt/zD3DI/O0Lw8sIQlhxCivA98B+c+fc4PA9/wKHzN++MLyMIIQVp7DOPJ32Azc4fM+/wCHzty8MLyMIYcUpXGOeTvVzZ25w+J5/zZ3XvjC8DCGEFaewBvi76WjNAzc4fM9/wCHzty8MLyMIYcUpzAJ/AgfNnWPe4Xv+Nw+H+8LwMoIQVpzCKvO0+Qe4weF7/gMOmb99YXgZQQgrTmEF+B44aLraNzh8z//AIfO3LwwvIwjhS5Ik9HUAkZBl2WbgReA+V177K3DAvO6+MLyMIIQVJZEA9wKPAfPAEgeu/xU4ZB7w+8LwMoIQVpREAtwFPAHMm4f6dQ5c/ytwyDzg94XhZQQhrCiZecB9wGNgng6XOHD9r8Ah84DfF4aXEYSwomQS4G7gCeA6YImD1/8KHDIP+H1heBlBCCtKJgHuBp4wT6xLHLz+V+CQecDvC8PLCEJYUToJcI/5Jbt5S13i4PW/AofMA35fGF5GEMKK0kmA+4DHgHnLvcSB638FDpkH/L4wvIwghBWlkwD3AE8A14E5Dlz/K3DIPOD3heFlBCGsKJ0EuAt4ArgOWOLg9b8Ch8wDfl8YXkYQwopSSYDbgaeA68B1Dlz/K3DIPOD3heFlBCGsKJU54G7gCeA6h6/91Tyh9oXhZQQhrCiVBHNn31PAdeA6h6/9FThkHvD7wvAyghBWlEqCeTrtA64D1zl87a/AIfOA3xeGlxGEsKJUEuA24CngOnCdw9f+ChwyD/h9YXgZQQgrSiUBbgOeMndYc/vF4Wv/MA+H+8LwMoL4F1Y92G4sH29kAAAAAElFTkSuQmCC";
 
-  // Badge Size Calculation (15% of image width)
-  const badgeWidth = Math.round(width * 0.15);
-  const fontSize = Math.round(badgeWidth * 0.5);
+// =======================
+// 2. IMAGE PROCESSOR (Fixed)
+// =======================
+async function add4KBadge(imageBuffer: ArrayBuffer): Promise<Uint8Array> {
+  // 1. Decode Main Image
+  const image = await decode(new Uint8Array(imageBuffer));
+  
+  // 2. Decode Gold Badge
+  // Base64 string ကို binary အဖြစ်ပြောင်းပြီး decode လုပ်ခြင်း
+  const binaryString = atob(GOLD_BADGE_B64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const badge = await decode(bytes);
 
-  const svgBadge = `
-    <svg width="${badgeWidth}" height="${Math.round(badgeWidth/2)}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
-          <stop offset="100%" style="stop-color:#FDB931;stop-opacity:1" />
-        </linearGradient>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#goldGrad)" rx="10" ry="10" stroke="#FFF" stroke-width="2"/>
-      <text x="50%" y="55%" font-family="Arial, sans-serif" font-weight="900" font-size="${fontSize}" 
-            fill="#000" dominant-baseline="middle" text-anchor="middle" style="text-shadow: 1px 1px 0px rgba(255,255,255,0.4);">4K</text>
-    </svg>
-  `;
+  // 3. Resize Badge
+  // ပုံအကြီးအသေးပေါ်မူတည်ပြီး 4K တံဆိပ်ကို 15% ratio နဲ့ resize လုပ်မယ်
+  const targetWidth = Math.max(50, Math.round(image.width * 0.15));
+  badge.resize(targetWidth, Image.RESIZE_AUTO);
 
-  return await image
-    .composite([{ input: Buffer.from(svgBadge), gravity: 'northeast', top: 20, left: 0 }])
-    .toBuffer();
+  // 4. Composite
+  // ညာဘက်ထောင့် (Top-Right) မှာ ကပ်မယ်
+  const x = image.width - badge.width - 20; // 20px padding from right
+  const y = 20; // 20px padding from top
+  
+  image.composite(badge, x, y);
+
+  // 5. Encode back to JPEG
+  return await image.encodeJPEG(90); // 90% Quality
 }
 
 // =======================
-// 2. FRONTEND UI
+// 3. FRONTEND UI
 // =======================
 app.get("/", (c) => c.html(html`
 <!DOCTYPE html>
@@ -73,13 +80,11 @@ app.get("/", (c) => c.html(html`
     <!-- Form -->
     <form id="uploadForm" action="/generate" method="POST" enctype="multipart/form-data" class="space-y-6">
       
-      <!-- Input Type Switcher -->
       <div class="flex bg-zinc-900/50 p-1 rounded-xl">
         <button type="button" onclick="toggleInput('file')" id="btnFile" class="flex-1 py-2 text-sm font-medium rounded-lg bg-zinc-800 text-white shadow transition-all">Upload File</button>
         <button type="button" onclick="toggleInput('url')" id="btnUrl" class="flex-1 py-2 text-sm font-medium rounded-lg text-zinc-400 hover:text-white transition-all">Image URL</button>
       </div>
 
-      <!-- File Input -->
       <div id="fileInput" class="relative group">
         <div class="border-2 border-dashed border-zinc-700 rounded-2xl p-8 text-center hover:border-yellow-500/50 transition-colors cursor-pointer" onclick="document.getElementById('fileField').click()">
           <i class="fa-solid fa-cloud-arrow-up text-3xl text-zinc-600 group-hover:text-yellow-500 transition-colors mb-3"></i>
@@ -89,7 +94,6 @@ app.get("/", (c) => c.html(html`
         </div>
       </div>
 
-      <!-- URL Input -->
       <div id="urlInput" class="hidden">
         <div class="relative">
           <i class="fa-solid fa-link absolute left-4 top-3.5 text-zinc-500"></i>
@@ -98,7 +102,6 @@ app.get("/", (c) => c.html(html`
         </div>
       </div>
 
-      <!-- Submit Button -->
       <button type="submit" onclick="showLoading()" class="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-yellow-500/20 flex items-center justify-center gap-2">
         <span id="btnText">Generate Poster</span>
         <div id="loadingSpinner" class="loader ease-linear rounded-full border-2 border-t-2 border-black h-5 w-5 hidden"></div>
@@ -108,7 +111,7 @@ app.get("/", (c) => c.html(html`
   </div>
 
   <footer class="mt-8 text-zinc-600 text-xs">
-    Powered by Deno & Hono
+    Powered by Deno & Hono (Serverless)
   </footer>
 
   <script>
@@ -129,20 +132,14 @@ app.get("/", (c) => c.html(html`
         document.getElementById('btnFile').classList.add('text-zinc-400');
       }
     }
-
     function updateFileName(input) {
       const name = input.files[0]?.name;
       const display = document.getElementById('fileName');
-      if(name) {
-        display.innerText = name;
-        display.classList.remove('hidden');
-      }
+      if(name) { display.innerText = name; display.classList.remove('hidden'); }
     }
-
     function showLoading() {
       document.getElementById('btnText').innerText = 'Processing...';
       document.getElementById('loadingSpinner').classList.remove('hidden');
-      // Button disable to prevent double submit
       document.querySelector('button[type="submit"]').classList.add('opacity-75', 'cursor-not-allowed');
     }
   </script>
@@ -151,34 +148,34 @@ app.get("/", (c) => c.html(html`
 `));
 
 // =======================
-// 3. GENERATE & DOWNLOAD PAGE
+// 4. GENERATE ROUTE
 // =======================
 app.post("/generate", async (c) => {
   try {
     const body = await c.req.parseBody();
     let imageBuffer: ArrayBuffer | null = null;
 
-    // 1. Check if File Uploaded
-    const file = body['file'];
-    if (file && file instanceof File && file.size > 0) {
-      imageBuffer = await file.arrayBuffer();
-    } 
-    // 2. Check if URL provided
-    else if (body['url']) {
+    if (body['file'] && body['file'] instanceof File && body['file'].size > 0) {
+      imageBuffer = await body['file'].arrayBuffer();
+    } else if (body['url']) {
       const response = await fetch(body['url'] as string);
       if (!response.ok) throw new Error("Cannot fetch image URL");
       imageBuffer = await response.arrayBuffer();
     }
 
-    if (!imageBuffer) return c.text("Please upload a file or provide a URL", 400);
+    if (!imageBuffer) return c.text("Error: No image provided", 400);
 
-    // 3. Process Image
-    const processedBuffer = await add4KBadge(imageBuffer);
+    // Process Image
+    const processedBytes = await add4KBadge(imageBuffer);
     
-    // 4. Convert to Base64 to display directly
-    const base64Image = `data:image/jpeg;base64,${processedBuffer.toString('base64')}`;
+    // Convert Uint8Array to Base64 manually for Deno compatibility
+    let binary = "";
+    const len = processedBytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(processedBytes[i]);
+    }
+    const base64Image = `data:image/jpeg;base64,${btoa(binary)}`;
 
-    // 5. Return Result Page
     return c.html(html`
       <!DOCTYPE html>
       <html lang="en">
@@ -191,39 +188,24 @@ app.post("/generate", async (c) => {
       </head>
       <body class="min-h-screen flex flex-col items-center justify-center p-4">
         <div class="max-w-4xl w-full text-center">
-          
           <h2 class="text-3xl font-bold text-yellow-500 mb-6">Poster Ready!</h2>
-          
-          <!-- Image Preview -->
           <div class="relative inline-block rounded-xl overflow-hidden shadow-2xl border border-zinc-800 mb-8">
             <img src="${base64Image}" alt="4K Poster" class="max-h-[60vh] w-auto object-contain">
           </div>
-
-          <!-- Actions -->
           <div class="flex gap-4 justify-center">
-            <a href="/" class="px-6 py-3 rounded-xl bg-zinc-800 text-white font-medium hover:bg-zinc-700 transition">
-              <i class="fa-solid fa-arrow-left mr-2"></i> Create New
-            </a>
-            
-            <a href="${base64Image}" download="4k-poster-edited.jpg" 
+            <a href="/" class="px-6 py-3 rounded-xl bg-zinc-800 text-white font-medium hover:bg-zinc-700 transition">Create New</a>
+            <a href="${base64Image}" download="4k-poster-enhanced.jpg" 
                class="px-8 py-3 rounded-xl bg-yellow-500 text-black font-bold hover:bg-yellow-400 transition shadow-lg shadow-yellow-500/20">
-              <i class="fa-solid fa-download mr-2"></i> Download Image
+               <i class="fa-solid fa-download mr-2"></i> Download
             </a>
           </div>
-
         </div>
       </body>
       </html>
     `);
 
   } catch (e: any) {
-    return c.html(`
-      <div style="color:red; text-align:center; margin-top:50px;">
-        <h1>Error Occurred</h1>
-        <p>${e.message}</p>
-        <a href="/" style="color:white">Go Back</a>
-      </div>
-    `);
+    return c.html(`<div style="color:red;text-align:center;padding:50px;">Error: ${e.message}<br><a href="/" style="color:white;text-decoration:underline;">Try Again</a></div>`);
   }
 });
 
